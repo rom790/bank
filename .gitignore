@@ -7,7 +7,3 @@
 *.bin
 *.out
 *.obj
-
-git config --global user.name "rom790"
-
-git config --global user.email "romanov.egor05@mail.ru"
