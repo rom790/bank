@@ -22,6 +22,7 @@ type APIError struct {
 
 type APIServer struct {
 	listenAddr string
+	store      Storage
 }
 
 func WriteJSON(w http.ResponseWriter, status int, v any) error {
@@ -37,9 +38,10 @@ func makeHTTPHandleFunc(f apiFunc) http.HandlerFunc {
 		}
 	}
 }
-func NewApiServ(listenAddr string) *APIServer {
+func NewApiServ(listenAddr string, store Storage) *APIServer {
 	return &APIServer{
 		listenAddr: listenAddr,
+		store:      store,
 	}
 
 }
@@ -104,12 +106,32 @@ func (s *APIServer) handleAccount(w http.ResponseWriter, r *http.Request) error 
 	return fmt.Errorf("unsupported method %s", r.Method)
 
 }
+
 func (s *APIServer) handleGetAcc(w http.ResponseWriter, r *http.Request) error {
+	accounts, err := s.store.GetAccounts()
+	if err != nil {
+		return err
+	}
+
+	return WriteJSON(w, http.StatusOK, accounts)
+}
+func (s *APIServer) handleGetAccByID(w http.ResponseWriter, r *http.Request) error {
+
 	account := NewAccount("Maks", "Kidrov")
 	return WriteJSON(w, http.StatusOK, account)
 }
 func (s *APIServer) handleCreateAcc(w http.ResponseWriter, r *http.Request) error {
-	return nil
+	createAccReq := new(CreateAccountRequest)
+	if err := json.NewDecoder(r.Body).Decode(createAccReq); err != nil {
+		return err
+	}
+
+	account := NewAccount(createAccReq.FirstName, createAccReq.LastName)
+	if err := s.store.CreateAccount(account); err != nil {
+		return err
+	}
+
+	return WriteJSON(w, http.StatusOK, createAccReq)
 }
 func (s *APIServer) handleDeleteAcc(w http.ResponseWriter, r *http.Request) error {
 	return nil
