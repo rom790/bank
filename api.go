@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -17,7 +18,7 @@ import (
 type apiFunc func(http.ResponseWriter, *http.Request) error
 
 type APIError struct {
-	Error string
+	Error string `json:"error"`
 }
 
 type APIServer struct {
@@ -50,7 +51,8 @@ func (s *APIServer) Run() {
 	router := mux.NewRouter()
 
 	router.HandleFunc("/account", makeHTTPHandleFunc(s.handleAccount))
-
+	router.HandleFunc("/account/{id}", makeHTTPHandleFunc(s.handleAccByID))
+	router.HandleFunc("/transfer", makeHTTPHandleFunc(s.handleTransfer))
 	// http.ListenAndServe(s.listenAddr, router)
 	server := &http.Server{
 		Addr:    s.listenAddr,
@@ -107,6 +109,17 @@ func (s *APIServer) handleAccount(w http.ResponseWriter, r *http.Request) error 
 
 }
 
+func (s *APIServer) handleAccByID(w http.ResponseWriter, r *http.Request) error {
+	switch r.Method {
+	case "GET":
+		return s.handleGetAccByID(w, r)
+	case "DELETE":
+		return s.handleDeleteAcc(w, r)
+	}
+
+	return fmt.Errorf("ussupported id method %s", r.Method)
+}
+
 func (s *APIServer) handleGetAcc(w http.ResponseWriter, r *http.Request) error {
 	accounts, err := s.store.GetAccounts()
 	if err != nil {
@@ -116,8 +129,14 @@ func (s *APIServer) handleGetAcc(w http.ResponseWriter, r *http.Request) error {
 	return WriteJSON(w, http.StatusOK, accounts)
 }
 func (s *APIServer) handleGetAccByID(w http.ResponseWriter, r *http.Request) error {
-
-	account := NewAccount("Maks", "Kidrov")
+	id, err := getIDFromRequest(r)
+	if err != nil {
+		return err
+	}
+	account, err := s.store.GetAccountByID(id)
+	if err != nil {
+		return err
+	}
 	return WriteJSON(w, http.StatusOK, account)
 }
 func (s *APIServer) handleCreateAcc(w http.ResponseWriter, r *http.Request) error {
@@ -126,6 +145,7 @@ func (s *APIServer) handleCreateAcc(w http.ResponseWriter, r *http.Request) erro
 		return err
 	}
 
+	defer r.Body.Close()
 	account := NewAccount(createAccReq.FirstName, createAccReq.LastName)
 	if err := s.store.CreateAccount(account); err != nil {
 		return err
@@ -134,8 +154,33 @@ func (s *APIServer) handleCreateAcc(w http.ResponseWriter, r *http.Request) erro
 	return WriteJSON(w, http.StatusOK, createAccReq)
 }
 func (s *APIServer) handleDeleteAcc(w http.ResponseWriter, r *http.Request) error {
-	return nil
+	id, err := getIDFromRequest(r)
+	if err != nil {
+		return err
+	}
+
+	if err := s.store.DeleteAccount(id); err != nil {
+		return err
+	}
+	return WriteJSON(w, http.StatusOK, map[string]int{"deleted": id})
 }
 func (s *APIServer) handleTransfer(w http.ResponseWriter, r *http.Request) error {
-	return nil
+	transferReq := new(TransferRequest)
+	if err := json.NewDecoder(r.Body).Decode(transferReq); err != nil {
+		return err
+	}
+
+	defer r.Body.Close()
+	return WriteJSON(w, http.StatusOK, transferReq)
+}
+
+func getIDFromRequest(r *http.Request) (int, error) {
+	idStr := mux.Vars(r)["id"]
+	// fmt.Println(idStr)
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		return id, fmt.Errorf("invalid id %s", idStr)
+	}
+
+	return id, nil
 }
