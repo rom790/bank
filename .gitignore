@@ -7,4 +7,6 @@
 *.bin
 *.out
 *.obj
+*.env
 bin/*
+
